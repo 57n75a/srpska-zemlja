@@ -1,0 +1,82 @@
+// Srpska Zemlja — data model
+// Deploy target: Vercel Postgres, Neon, or Supabase (all Vercel-friendly)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Region {
+  id           Int      @id // 0..99
+  label        String   @unique // e.g. "A0"
+  centroidLat  Float?
+  centroidLng  Float?
+  gpsBridged   Boolean  @default(false)
+  units        Unit[]
+}
+
+model Unit {
+  id          Int      @id // global id: region*10000 + block*100 + unit, 0..999999
+  regionId    Int
+  region      Region   @relation(fields: [regionId], references: [id])
+  blockIndex  Int      // 0..99
+  unitIndex   Int      // 0..99
+  status      UnitStatus @default(AVAILABLE)
+  ownerId     String?
+  owner       Member?  @relation(fields: [ownerId], references: [id])
+  lat         Float?
+  lng         Float?
+  reservedAt  DateTime?
+  termMonths  Int?
+  expiresAt   DateTime?
+
+  @@index([regionId, blockIndex])
+  @@index([status])
+}
+
+enum UnitStatus {
+  AVAILABLE
+  RESERVED
+  HELD
+}
+
+model Member {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  displayName  String?
+  isVojvoda    Boolean  @default(false) // true once holding >= 1000 m^2
+  createdAt    DateTime @default(now())
+  units        Unit[]
+  reservations Reservation[]
+}
+
+model Reservation {
+  id          String   @id @default(uuid())
+  memberId    String
+  member      Member   @relation(fields: [memberId], references: [id])
+  unitCount   Int
+  term        Term
+  pricePerM2  Decimal  @db.Decimal(6, 2)
+  totalPaid   Decimal  @db.Decimal(12, 2)
+  status      ReservationStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+}
+
+enum Term {
+  MONTHLY
+  YEAR_1
+  YEAR_3
+  YEAR_5
+  YEAR_10
+}
+
+enum ReservationStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  REFUNDED
+}
