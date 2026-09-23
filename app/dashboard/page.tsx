@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { PRICING_TIERS } from '@/lib/pricing';
+export const dynamic = 'force-dynamic';
 
 // Server component — fetches directly via Prisma (no client-side API
 // round-trip needed since this renders on the server).
