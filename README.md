@@ -24,12 +24,61 @@ to deploy to Vercel.
   flow hitting the real API), `/dashboard` (server-rendered from real
   Prisma data instead of the mock data in the earlier demo).
 
+## Auth (Google, Meta, Apple)
+
+Real SSO is wired in via NextAuth (`app/api/auth/[...nextauth]/route.ts`),
+with a login page at `/login` and account management at `/account`. The
+header (`app/components/Header.tsx`, shown on every page via `app/layout.tsx`)
+carries the logo and switches between "Sign in" and "Account / My ground /
+Sign out" based on session state.
+
+**Setting up SSO** — each provider needs credentials from its own developer
+console; nothing here can generate real ones for you:
+
+1. **Google** — console.cloud.google.com → APIs & Services → Credentials →
+   Create OAuth client ID (Web application). Add
+   `https://your-domain.vercel.app/api/auth/callback/google` as an
+   authorized redirect URI. Copy the client ID/secret into `GOOGLE_CLIENT_ID`
+   / `GOOGLE_CLIENT_SECRET`.
+2. **Meta** — developers.facebook.com → create an app → add "Facebook
+   Login" product → Settings → add
+   `https://your-domain.vercel.app/api/auth/callback/facebook` as a valid
+   OAuth redirect URI. Copy the App ID/Secret into `FACEBOOK_CLIENT_ID` /
+   `FACEBOOK_CLIENT_SECRET`.
+3. **Apple** — developer.apple.com → Certificates, IDs & Profiles → register
+   a Services ID (this is your `APPLE_CLIENT_ID`), enable "Sign in with
+   Apple," add the same callback pattern
+   (`.../api/auth/callback/apple`), then generate a private key and use it
+   to sign a JWT — that signed JWT is your `APPLE_CLIENT_SECRET`, and it
+   expires after at most 6 months, so this needs periodic regeneration
+   (a small script, not a one-time value). Apple's setup is the most
+   involved of the three — budget real time for it.
+4. Set `NEXTAUTH_SECRET` (any random string — `openssl rand -base64 32`
+   works) and `NEXTAUTH_URL` to your live domain in Vercel's environment
+   variables too, not just locally.
+
+Every successful sign-in upserts a `Member` row by email (see the `signIn`
+callback in the NextAuth route), so a Google login and a later Apple login
+with the same email address resolve to the same member and the same
+reserved units.
+
+## The real Serbia-shaped map
+
+A separate artifact (published alongside this app) renders every 1 m² unit
+inside Serbia's actual simplified border, projected from real coordinates,
+with a virtualized grid that only renders what's on screen — this is what
+makes "all 1,000,000 m²" navigable without freezing the browser. The same
+boundary data lives here at `lib/serbia-boundary.json` (a simplified
+polygon, ~130 points, in `[lng, lat]` pairs) so the same shape can be
+ported into `/reserve` directly. That port isn't done yet — `/reserve`
+still uses the simpler one-block-at-a-time picker from the original
+scaffold. Recommended next step: replace its grid-rendering logic with the
+canvas/projection approach from the map artifact, now backed by this
+project's real `/api/units` and `/api/reservations` endpoints instead of
+the artifact's synthetic taken/available data.
+
 ## What's intentionally left as a next step
 
-- **Auth.** `/dashboard` and `/reserve` use a hardcoded demo email / manual
-  email field. Swap in NextAuth, Clerk, or Vercel's own auth once you pick
-  one — the API routes already expect a `memberId`, so this is a thin layer
-  on top.
 - **Payments.** `POST /api/reservations` creates a `PENDING` reservation and
   marks units `HELD`, but nothing charges a card yet. Add a Stripe (or
   equivalent) checkout session after reservation creation, then a webhook
